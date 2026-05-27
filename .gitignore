@@ -1,0 +1,30 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+.npm-cache/
+
+# Build output
+dist/
+build/
+coverage/
+
+# Runtime files
+uploads/
+*.log
+*.err.log
+*.live.log
+*.live.err.log
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Prisma local artifacts
+*.db
+*.db-journal

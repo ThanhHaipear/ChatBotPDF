@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: studydocs_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: studydocs
+      POSTGRES_PASSWORD: studydocs123
+      POSTGRES_DB: studydocs_ai
+    ports:
+      - "5433:5432"
+    volumes:
+      - studydocs_pg_data:/var/lib/postgresql/data
+
+volumes:
+  studydocs_pg_data:
