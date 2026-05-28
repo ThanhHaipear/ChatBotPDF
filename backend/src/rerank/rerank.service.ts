@@ -72,15 +72,43 @@ export class RerankService {
         return null;
       }
 
-      const data = await response.json();
-
-      if (Array.isArray(data) && data.every((item) => typeof item === 'number')) {
-        return data;
-      }
-
-      return null;
+      return this.parseScores(await response.json());
     } catch {
       return null;
     }
+  }
+
+  private parseScores(data: unknown): number[] | null {
+    if (!Array.isArray(data)) {
+      return null;
+    }
+
+    if (data.every((item) => typeof item === 'number')) {
+      return data;
+    }
+
+    const scores = data
+      .map((item) => {
+        if (typeof item === 'object' && item !== null && 'score' in item) {
+          const score = (item as { score?: unknown }).score;
+          return typeof score === 'number' ? score : null;
+        }
+
+        if (Array.isArray(item)) {
+          const firstScoredItem = item.find(
+            (candidate) =>
+              typeof candidate === 'object' &&
+              candidate !== null &&
+              typeof (candidate as { score?: unknown }).score === 'number',
+          ) as { score: number } | undefined;
+
+          return firstScoredItem?.score ?? null;
+        }
+
+        return null;
+      })
+      .filter((score): score is number => typeof score === 'number');
+
+    return scores.length === data.length ? scores : null;
   }
 }

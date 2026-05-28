@@ -353,7 +353,7 @@ Update the Features section:
 - [x] Switch chat query embedding to Hugging Face embeddings.
 - [x] Update Prisma vector dimension if the new model is not 1536-dimensional.
 - [x] Create a migration for the vector dimension change.
-- [ ] Delete and re-index sample documents after changing embeddings.
+- [ ] Delete and re-index sample documents after changing embeddings. No sample PDF is committed in this repo; upload PDFs again after running the migration.
 - [x] Create `RerankModule` and `RerankService`.
 - [x] Change vector search from top 8 to top 20.
 - [x] Add reranking and only use the top 5 chunks as context.
@@ -361,10 +361,11 @@ Update the Features section:
 - [x] Move prompt generation into `RagService`.
 - [x] Update the `sources` response with `rerankScore`.
 - [x] Update README.
-- [ ] Test PDF upload.
-- [ ] Test chat with subject/topic/level/priceType filters.
-- [ ] Test the case where no relevant document exists.
-- [ ] Test frontend rendering for answer, recommendations, and sources.
+- [ ] Test PDF upload manually with a real `HUGGINGFACE_API_KEY`.
+- [x] Test chat with subject/topic/level/priceType filters at service level.
+- [x] Test the case where no relevant document exists at service level.
+- [x] Test frontend build for answer, recommendations, and sources UI.
+- [ ] Test frontend rendering in a browser against a running backend.
 
 ## 7. Recommended Implementation Order
 

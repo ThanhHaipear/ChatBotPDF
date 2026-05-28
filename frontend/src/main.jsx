@@ -192,7 +192,7 @@ function App() {
       <section className="stats-grid">
         <Stat icon={<FileText size={20} />} label="Documents" value={documents.length} detail="Uploaded PDF files" />
         <Stat icon={<Database size={20} />} label="Indexed chunks" value={indexedChunks} detail="Vector records" />
-        <Stat icon={<BookOpen size={20} />} label="Retrieval" value="Top 8" detail="Source-grounded context" />
+        <Stat icon={<BookOpen size={20} />} label="Retrieval" value="20 -> 5" detail="Vector search and rerank" />
       </section>
 
       {(status || error) && (
@@ -341,7 +341,7 @@ function App() {
                 <div className="source-card" key={`${item.title}-${item.similarity}`}>
                   <div className="source-title">
                     <strong>{item.title}</strong>
-                    <span>{Number(item.similarity).toFixed(3)}</span>
+                    <ScorePills item={item} />
                   </div>
                   <p>{[item.subject, item.topic, item.level, item.priceType].filter(Boolean).join(' | ')}</p>
                 </div>
@@ -356,7 +356,7 @@ function App() {
                 <article className="source-card" key={`${source.documentTitle}-${index}`}>
                   <div className="source-title">
                     <strong>{source.documentTitle}</strong>
-                    <span>{Number(source.similarity).toFixed(3)}</span>
+                    <ScorePills item={source} />
                   </div>
                   <p>{source.preview}</p>
                 </article>
@@ -379,6 +379,15 @@ function Stat({ icon, label, value, detail }) {
         <small>{detail}</small>
       </div>
     </div>
+  );
+}
+
+function ScorePills({ item }) {
+  return (
+    <span className="score-pills">
+      <span title="Rerank score">R {formatScore(item.rerankScore)}</span>
+      <span title="Vector similarity">V {formatScore(item.similarity)}</span>
+    </span>
   );
 }
 
@@ -416,6 +425,11 @@ function setFormValue(setter, key, value) {
 function getErrorMessage(error) {
   if (error instanceof Error) return error.message;
   return 'Unexpected error';
+}
+
+function formatScore(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(3) : '0.000';
 }
 
 createRoot(document.getElementById('root')).render(

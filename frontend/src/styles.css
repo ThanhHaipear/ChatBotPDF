@@ -456,7 +456,15 @@ textarea {
   overflow-wrap: anywhere;
 }
 
-.source-title span {
+.score-pills {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.score-pills span {
   display: inline-flex;
   align-items: center;
   min-height: 28px;
