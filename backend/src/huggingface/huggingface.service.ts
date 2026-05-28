@@ -28,7 +28,7 @@ export class HuggingFaceService {
       );
     }
 
-    const endpoint = `${this.apiBaseUrl}/models/${this.embeddingModel}`;
+    const endpoint = `${this.apiBaseUrl}/models/${this.embeddingModel}/pipeline/feature-extraction`;
     const response = await this.fetchEmbedding(endpoint, text);
 
     if (!response.ok) {
