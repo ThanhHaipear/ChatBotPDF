@@ -11,9 +11,18 @@ export class HuggingFaceService {
   ).replace(/\/$/, '');
   private readonly embeddingModel =
     process.env.HUGGINGFACE_EMBEDDING_MODEL || 'BAAI/bge-m3';
+  private readonly embeddingDimensions = Number(
+    process.env.HUGGINGFACE_EMBEDDING_DIMENSIONS || 1024,
+  );
+  private readonly embeddingFallback =
+    process.env.HUGGINGFACE_EMBEDDING_FALLBACK || 'none';
 
   async createEmbedding(text: string): Promise<number[]> {
     if (!this.apiKey) {
+      if (this.embeddingFallback === 'hashing') {
+        return this.createHashingEmbedding(text);
+      }
+
       throw new InternalServerErrorException(
         'HUGGINGFACE_API_KEY is not configured',
       );
@@ -57,6 +66,15 @@ export class HuggingFaceService {
         }),
       });
     } catch (error) {
+      if (this.embeddingFallback === 'hashing') {
+        return new Response(JSON.stringify(this.createHashingEmbedding(text)), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+      }
+
       throw new InternalServerErrorException(
         `Cannot reach Hugging Face embedding endpoint ${endpoint}: ${this.getErrorMessage(error)}`,
       );
@@ -100,6 +118,42 @@ export class HuggingFaceService {
 
   private isNumberArray(value: unknown): value is number[] {
     return Array.isArray(value) && value.every((item) => typeof item === 'number');
+  }
+
+  private createHashingEmbedding(text: string): number[] {
+    const vector = Array.from({ length: this.embeddingDimensions }, () => 0);
+    const tokens = text
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .split(/[^a-z0-9]+/i)
+      .filter((token) => token.length > 1);
+
+    for (const token of tokens) {
+      const index = this.positiveHash(token) % this.embeddingDimensions;
+      vector[index] += 1;
+    }
+
+    const norm = Math.sqrt(
+      vector.reduce((total, value) => total + value * value, 0),
+    );
+
+    if (norm === 0) {
+      return vector;
+    }
+
+    return vector.map((value) => value / norm);
+  }
+
+  private positiveHash(value: string) {
+    let hash = 2166136261;
+
+    for (let i = 0; i < value.length; i++) {
+      hash ^= value.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+
+    return hash >>> 0;
   }
 
   private getErrorMessage(error: unknown) {
