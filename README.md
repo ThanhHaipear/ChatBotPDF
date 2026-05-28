@@ -42,8 +42,11 @@ Create `backend/.env` from `backend/.env.example` and set:
 DATABASE_URL="postgresql://studydocs:studydocs123@localhost:5433/studydocs_ai?schema=public"
 OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
 HUGGINGFACE_API_KEY="YOUR_HUGGINGFACE_TOKEN"
+HUGGINGFACE_API_BASE_URL="https://router.huggingface.co/hf-inference"
 HUGGINGFACE_EMBEDDING_MODEL="BAAI/bge-m3"
-HUGGINGFACE_RERANK_MODEL="BAAI/bge-reranker-base"
+HUGGINGFACE_EMBEDDING_DIMENSIONS=1024
+HUGGINGFACE_EMBEDDING_FALLBACK="none"
+HUGGINGFACE_RERANK_MODEL="BAAI/bge-reranker-v2-m3"
 RAG_VECTOR_TOP_K=20
 RAG_RERANK_TOP_K=5
 PORT=3000
@@ -60,6 +63,12 @@ PORT=3000
 - React demo UI for upload, document list, chat, recommendations, source preview, similarity scores, and rerank scores
 
 ## Verification
+
+Current status:
+
+- PDF upload, indexing, and chat have been tested successfully with a real PDF.
+- The active RAG flow is Hugging Face embeddings -> pgvector top 20 retrieval -> Hugging Face rerank with fallback -> top 5 context -> LangChain prompt -> OpenAI answer.
+- Because embeddings use 1024 dimensions, documents indexed with the previous 1536-dimensional OpenAI embeddings must be uploaded and indexed again.
 
 Automated checks:
 
