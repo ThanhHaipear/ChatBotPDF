@@ -14,6 +14,10 @@ export type RerankOutput = RerankInput & {
 @Injectable()
 export class RerankService {
   private readonly apiKey = process.env.HUGGINGFACE_API_KEY;
+  private readonly apiBaseUrl = (
+    process.env.HUGGINGFACE_API_BASE_URL ||
+    'https://router.huggingface.co/hf-inference'
+  ).replace(/\/$/, '');
   private readonly rerankModel =
     process.env.HUGGINGFACE_RERANK_MODEL || 'BAAI/bge-reranker-base';
 
@@ -49,7 +53,7 @@ export class RerankService {
 
     try {
       const response = await fetch(
-        `https://api-inference.huggingface.co/models/${this.rerankModel}`,
+        `${this.apiBaseUrl}/models/${this.rerankModel}`,
         {
           method: 'POST',
           headers: {

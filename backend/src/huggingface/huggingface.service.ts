@@ -5,6 +5,10 @@ type FeatureExtractionResponse = number[] | number[][] | number[][][];
 @Injectable()
 export class HuggingFaceService {
   private readonly apiKey = process.env.HUGGINGFACE_API_KEY;
+  private readonly apiBaseUrl = (
+    process.env.HUGGINGFACE_API_BASE_URL ||
+    'https://router.huggingface.co/hf-inference'
+  ).replace(/\/$/, '');
   private readonly embeddingModel =
     process.env.HUGGINGFACE_EMBEDDING_MODEL || 'BAAI/bge-m3';
 
@@ -15,22 +19,8 @@ export class HuggingFaceService {
       );
     }
 
-    const response = await fetch(
-      `https://api-inference.huggingface.co/pipeline/feature-extraction/${this.embeddingModel}`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          inputs: text,
-          options: {
-            wait_for_model: true,
-          },
-        }),
-      },
-    );
+    const endpoint = `${this.apiBaseUrl}/models/${this.embeddingModel}`;
+    const response = await this.fetchEmbedding(endpoint, text);
 
     if (!response.ok) {
       const message = await response.text();
@@ -49,6 +39,28 @@ export class HuggingFaceService {
     }
 
     return embedding;
+  }
+
+  private async fetchEmbedding(endpoint: string, text: string) {
+    try {
+      return await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          inputs: text,
+          options: {
+            wait_for_model: true,
+          },
+        }),
+      });
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `Cannot reach Hugging Face embedding endpoint ${endpoint}: ${this.getErrorMessage(error)}`,
+      );
+    }
   }
 
   private normalizeEmbeddingResponse(data: FeatureExtractionResponse): number[] {
@@ -88,5 +100,20 @@ export class HuggingFaceService {
 
   private isNumberArray(value: unknown): value is number[] {
     return Array.isArray(value) && value.every((item) => typeof item === 'number');
+  }
+
+  private getErrorMessage(error: unknown) {
+    if (error instanceof Error) {
+      const cause =
+        typeof error.cause === 'object' &&
+        error.cause !== null &&
+        'message' in error.cause
+          ? String((error.cause as { message?: unknown }).message)
+          : '';
+
+      return cause ? `${error.message}: ${cause}` : error.message;
+    }
+
+    return 'Unknown error';
   }
 }
