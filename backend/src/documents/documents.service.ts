@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import * as fs from 'fs/promises';
 import { PDFParse } from 'pdf-parse';
-import { OpenAiService } from '../openai/openai.service';
+import { HuggingFaceService } from '../huggingface/huggingface.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { cleanText } from '../utils/clean-text';
 import { chunkText } from '../utils/chunk-text';
@@ -11,7 +11,7 @@ import { CreateDocumentDto } from './dto/create-document.dto';
 export class DocumentsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly openAiService: OpenAiService,
+    private readonly huggingFaceService: HuggingFaceService,
   ) {}
 
   async uploadAndIndex(file: Express.Multer.File, dto: CreateDocumentDto) {
@@ -50,7 +50,7 @@ export class DocumentsService {
     const chunks = chunkText(text);
 
     for (let i = 0; i < chunks.length; i++) {
-      const embedding = await this.openAiService.createEmbedding(chunks[i]);
+      const embedding = await this.huggingFaceService.createEmbedding(chunks[i]);
       const embeddingString = `[${embedding.join(',')}]`;
 
       await this.prisma.$executeRawUnsafe(

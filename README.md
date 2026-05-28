@@ -5,7 +5,7 @@ StudyDocs AI is a RAG-based chatbot that recommends learning materials from inde
 ## Tech Stack
 
 - Backend: NestJS, TypeScript, Prisma, PostgreSQL, pgvector
-- AI: OpenAI embeddings and response generation
+- AI: Hugging Face embeddings, LangChain RAG prompts, reranking, OpenAI response generation
 - Frontend: React, Vite
 - PDF processing: pdf-parse
 
@@ -41,6 +41,11 @@ Create `backend/.env` from `backend/.env.example` and set:
 ```env
 DATABASE_URL="postgresql://studydocs:studydocs123@localhost:5433/studydocs_ai?schema=public"
 OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
+HUGGINGFACE_API_KEY="YOUR_HUGGINGFACE_TOKEN"
+HUGGINGFACE_EMBEDDING_MODEL="BAAI/bge-m3"
+HUGGINGFACE_RERANK_MODEL="BAAI/bge-reranker-base"
+RAG_VECTOR_TOP_K=20
+RAG_RERANK_TOP_K=5
 PORT=3000
 ```
 
@@ -48,7 +53,8 @@ PORT=3000
 
 - Upload PDF documents with metadata
 - Extract and chunk PDF text
-- Generate embeddings and store vectors in PostgreSQL with pgvector
-- Retrieve relevant chunks with vector search
-- Generate source-grounded answers with OpenAI
+- Generate embeddings with Hugging Face models and store vectors in PostgreSQL with pgvector
+- Retrieve top-K chunks with vector search
+- Rerank retrieved chunks before answer generation
+- Generate source-grounded answers through a LangChain RAG prompt and OpenAI
 - React demo UI for upload, document list, chat, recommendations, and source preview

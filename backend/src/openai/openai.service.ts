@@ -25,11 +25,20 @@ export class OpenAiService {
     return response.data[0].embedding;
   }
 
-  async generateAnswer(userQuestion: string, context: string): Promise<string> {
+  async generateFromPrompt(prompt: string): Promise<string> {
     if (!process.env.OPENAI_API_KEY) {
       throw new InternalServerErrorException('OPENAI_API_KEY is not configured');
     }
 
+    const response = await this.openai.responses.create({
+      model: 'gpt-4.1-mini',
+      input: prompt,
+    });
+
+    return response.output_text;
+  }
+
+  async generateAnswer(userQuestion: string, context: string): Promise<string> {
     const prompt = `
 Ban la StudyDocs AI, chatbot goi y tai lieu hoc tap.
 
@@ -47,11 +56,6 @@ Cau hoi cua nguoi dung:
 ${userQuestion}
 `;
 
-    const response = await this.openai.responses.create({
-      model: 'gpt-4.1-mini',
-      input: prompt,
-    });
-
-    return response.output_text;
+    return this.generateFromPrompt(prompt);
   }
 }

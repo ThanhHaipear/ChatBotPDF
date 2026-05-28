@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { OpenAiModule } from '../openai/openai.module';
+import { HuggingFaceModule } from '../huggingface/huggingface.module';
 import { DocumentsController } from './documents.controller';
 import { DocumentsService } from './documents.service';
 
 @Module({
-  imports: [OpenAiModule],
+  imports: [HuggingFaceModule],
   controllers: [DocumentsController],
   providers: [DocumentsService],
 })
