@@ -1,19 +1,19 @@
 # StudyDocs AI
 
-StudyDocs AI la ung dung chatbot hoi dap va goi y tai lieu hoc tap tu file PDF. He thong upload PDF, tach noi dung thanh chunks, tao embedding bang Hugging Face, luu vector vao PostgreSQL/pgvector, truy hoi cac doan lien quan, rerank ket qua va dung OpenAI de sinh cau tra loi bang tieng Viet.
+StudyDocs AI is a RAG chatbot for answering questions and recommending learning materials from PDF files. The system uploads PDFs, splits extracted text into chunks, creates Hugging Face embeddings, stores vectors in PostgreSQL with pgvector, retrieves relevant chunks, reranks them, and uses OpenAI to generate Vietnamese answers.
 
-## Tinh nang chinh
+## Key Features
 
-- Upload va index tai lieu PDF kem metadata: title, subject, topic, level, priceType, price, sourceUrl.
-- Trich xuat text tu PDF, lam sach noi dung va chia chunk co overlap.
-- Tao embedding 1024 chieu voi Hugging Face model `BAAI/bge-m3`.
-- Luu embedding trong PostgreSQL voi extension `pgvector`.
-- Truy hoi vector top-K, mac dinh top 20 chunk.
-- Rerank bang Hugging Face rerank model, mac dinh `BAAI/bge-reranker-v2-m3`; neu rerank loi thi fallback theo similarity.
-- Sinh cau tra loi tu context bang LangChain prompt va OpenAI Responses API.
-- Frontend React/Vite gom upload modal, danh sach tai lieu, chat UI, filter, source preview va recommendation.
+- Upload and index PDF documents with metadata: title, subject, topic, level, priceType, price, and sourceUrl.
+- Extract PDF text, clean it, and split it into overlapping chunks.
+- Generate 1024-dimensional embeddings with the Hugging Face `BAAI/bge-m3` model.
+- Store embeddings in PostgreSQL with the `pgvector` extension.
+- Retrieve top-K chunks with vector similarity search, defaulting to the top 20 chunks.
+- Rerank results with a Hugging Face reranker, defaulting to `BAAI/bge-reranker-v2-m3`; if reranking fails, the app falls back to similarity scores.
+- Generate source-grounded answers with a LangChain prompt and the OpenAI Responses API.
+- Provide a React/Vite frontend with an upload modal, document list, chat UI, filters, source previews, and recommendations.
 
-## Kien truc
+## Architecture
 
 ```text
 frontend/ React + Vite
@@ -22,36 +22,36 @@ frontend/ React + Vite
     v
 backend/ NestJS API
     |
-    +-- pdf-parse: doc PDF
-    +-- Hugging Face: embedding + rerank
+    +-- pdf-parse: reads PDFs
+    +-- Hugging Face: embeddings + reranking
     +-- Prisma: ORM
-    +-- PostgreSQL + pgvector: luu document/chunk/vector
-    +-- OpenAI: sinh cau tra loi RAG
+    +-- PostgreSQL + pgvector: stores documents, chunks, and vectors
+    +-- OpenAI: generates RAG answers
 ```
 
-## Cong nghe
+## Tech Stack
 
 - Frontend: React 19, Vite 7, lucide-react
 - Backend: NestJS 11, TypeScript, Prisma 6
 - Database: PostgreSQL 16, pgvector
 - AI/RAG: Hugging Face Inference API, LangChain prompt, OpenAI `gpt-4.1-mini`
-- PDF: `pdf-parse`
-- Test: Jest, Supertest
+- PDF processing: `pdf-parse`
+- Testing: Jest, Supertest
 
-## Cau truc thu muc
+## Project Structure
 
 ```text
 .
 |-- backend/
-|   |-- prisma/                 # Prisma schema va migrations
+|   |-- prisma/                 # Prisma schema and migrations
 |   |-- src/
-|   |   |-- chat/               # API chat va RAG orchestration
-|   |   |-- documents/          # Upload, doc PDF, index chunks
+|   |   |-- chat/               # Chat API and RAG orchestration
+|   |   |-- documents/          # PDF upload, parsing, and indexing
 |   |   |-- huggingface/        # Embedding service
 |   |   |-- openai/             # OpenAI generation service
-|   |   |-- rag/                # Format context va prompt
-|   |   |-- rerank/             # Rerank service
-|   |   `-- utils/              # Clean text, chunk text
+|   |   |-- rag/                # Context and prompt formatting
+|   |   |-- rerank/             # Reranking service
+|   |   `-- utils/              # Text cleaning and chunking
 |   `-- docker-compose.yml      # PostgreSQL + pgvector
 |-- frontend/
 |   |-- src/main.jsx            # React app
@@ -60,17 +60,17 @@ backend/ NestJS API
 `-- README.md
 ```
 
-## Yeu cau moi truong
+## Requirements
 
-- Node.js phu hop voi NestJS/Vite hien tai
+- Node.js compatible with the current NestJS/Vite setup
 - npm
-- Docker Desktop hoac Docker Engine
+- Docker Desktop or Docker Engine
 - OpenAI API key
 - Hugging Face token
 
-## Cau hinh backend
+## Backend Configuration
 
-Tao file `backend/.env` tu `backend/.env.example`:
+Create `backend/.env` from `backend/.env.example`:
 
 ```env
 DATABASE_URL="postgresql://studydocs:studydocs123@localhost:5433/studydocs_ai?schema=public"
@@ -86,22 +86,22 @@ OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
 PORT=3000
 ```
 
-Ghi chu:
+Notes:
 
-- Prisma schema dang khai bao `DocumentChunk.embedding` la `vector(1024)`, nen embedding model phai tra ve dung 1024 chieu.
-- Neu doi embedding model hoac kich thuoc vector, can tao migration database tuong ung va index lai tai lieu.
-- `HUGGINGFACE_EMBEDDING_FALLBACK="hashing"` co the dung de fallback embedding khi khong goi duoc Hugging Face, nhung ket qua chi phu hop de demo/dev.
+- The Prisma schema defines `DocumentChunk.embedding` as `vector(1024)`, so the embedding model must return exactly 1024 dimensions.
+- If you change the embedding model or vector size, create a matching database migration and reindex documents.
+- `HUGGINGFACE_EMBEDDING_FALLBACK="hashing"` can be used as a fallback when Hugging Face is unreachable, but it is intended only for demo or development use.
 
-## Chay local
+## Local Development
 
-### 1. Chay database
+### 1. Start the database
 
 ```bash
 cd backend
 docker compose up -d
 ```
 
-### 2. Cai dependency va migrate database
+### 2. Install dependencies and migrate the database
 
 ```bash
 cd backend
@@ -110,26 +110,26 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-Neu can reset database trong moi truong dev:
+To reset the database in development:
 
 ```bash
 npx prisma migrate reset
 ```
 
-### 3. Chay backend
+### 3. Start the backend
 
 ```bash
 cd backend
 npm run start:dev
 ```
 
-Backend mac dinh chay tai:
+The backend runs at:
 
 ```text
 http://localhost:3000
 ```
 
-### 4. Chay frontend
+### 4. Start the frontend
 
 ```bash
 cd frontend
@@ -137,25 +137,25 @@ npm install
 npm run dev -- --port 5173
 ```
 
-Mo ung dung tai:
+Open the app at:
 
 ```text
 http://localhost:5173
 ```
 
-Frontend mac dinh goi API:
+The frontend calls this API by default:
 
 ```text
 http://localhost:3000
 ```
 
-Co the doi bang bien moi truong Vite:
+You can override it with a Vite environment variable:
 
 ```env
 VITE_API_URL="http://localhost:3000"
 ```
 
-## API chinh
+## API Endpoints
 
 ### Upload PDF
 
@@ -166,34 +166,34 @@ Content-Type: multipart/form-data
 
 Form fields:
 
-- `file`: PDF file, bat buoc
-- `title`: ten tai lieu, bat buoc
-- `subject`: mon hoc/linh vuc, bat buoc
-- `topic`: chu de, tuy chon
-- `level`: trinh do, tuy chon
-- `priceType`: `FREE` hoac `PAID`, tuy chon
-- `price`: gia, tuy chon
-- `sourceUrl`: nguon tai lieu, tuy chon
+- `file`: PDF file, required
+- `title`: document title, required
+- `subject`: subject or domain, required
+- `topic`: topic, optional
+- `level`: level, optional
+- `priceType`: `FREE` or `PAID`, optional
+- `price`: price, optional
+- `sourceUrl`: source URL, optional
 
-### Lay danh sach tai lieu
+### List Documents
 
 ```http
 GET /documents
 ```
 
-### Lay chi tiet tai lieu
+### Get Document Details
 
 ```http
 GET /documents/:id
 ```
 
-### Xoa tai lieu
+### Delete Document
 
 ```http
 DELETE /documents/:id
 ```
 
-### Chat voi tai lieu
+### Chat With Documents
 
 ```http
 POST /chat
@@ -204,7 +204,7 @@ Body:
 
 ```json
 {
-  "message": "Tai lieu nay noi ve noi dung gi?",
+  "message": "What is this document about?",
   "subject": "Artificial Intelligence",
   "topic": "AI Automation",
   "level": "",
@@ -212,25 +212,25 @@ Body:
 }
 ```
 
-Response gom:
+The response includes:
 
-- `answer`: cau tra loi tu OpenAI dua tren context
-- `recommendedDocuments`: danh sach tai lieu phu hop
-- `sources`: cac chunk duoc dung lam nguon, kem similarity va rerankScore
+- `answer`: an OpenAI-generated answer grounded in retrieved context
+- `recommendedDocuments`: matching document recommendations
+- `sources`: source chunks used for the answer, including similarity and rerankScore
 
-## Luong RAG
+## RAG Flow
 
-1. Nguoi dung upload PDF.
-2. Backend doc file, trich xuat text va chia chunk, mac dinh 700 tu/chunk va overlap 100 tu.
-3. Moi chunk duoc tao embedding bang Hugging Face.
-4. Chunk va vector duoc luu vao PostgreSQL/pgvector.
-5. Khi chat, cau hoi duoc embedding.
-6. pgvector lay top `RAG_VECTOR_TOP_K` chunk theo vector similarity.
-7. Rerank service sap xep lai chunks va chon top `RAG_RERANK_TOP_K`.
-8. RagService format context va prompt.
-9. OpenAI sinh cau tra loi bang tieng Viet, kem recommendation/source cho UI.
+1. The user uploads a PDF.
+2. The backend reads the file, extracts text, and splits it into chunks, defaulting to 700 words per chunk with a 100-word overlap.
+3. Each chunk is embedded with Hugging Face.
+4. Chunks and vectors are stored in PostgreSQL/pgvector.
+5. During chat, the user question is embedded.
+6. pgvector retrieves the top `RAG_VECTOR_TOP_K` chunks by vector similarity.
+7. The rerank service reorders chunks and selects the top `RAG_RERANK_TOP_K`.
+8. RagService formats the context and prompt.
+9. OpenAI generates a Vietnamese answer with recommendations and source data for the UI.
 
-## Lenh kiem tra
+## Verification Commands
 
 Backend:
 
@@ -247,9 +247,9 @@ cd frontend
 npm run build
 ```
 
-## Luu y van hanh
+## Operational Notes
 
-- Thu muc `backend/uploads` duoc dung de luu file PDF upload local.
-- Tai lieu da index bang embedding 1536 chieu cu can upload/index lai vi schema hien tai la `vector(1024)`.
-- Rerank co fallback theo similarity neu Hugging Face rerank endpoint khong tra ve score hop le.
-- End-to-end can PostgreSQL dang chay, `.env` hop le va it nhat mot PDF da upload/index thanh cong.
+- `backend/uploads` stores locally uploaded PDF files.
+- Documents indexed with the old 1536-dimensional embeddings must be uploaded and indexed again because the current schema uses `vector(1024)`.
+- Reranking falls back to vector similarity when the Hugging Face rerank endpoint does not return valid scores.
+- End-to-end testing requires PostgreSQL to be running, a valid `.env`, and at least one successfully uploaded and indexed PDF.
