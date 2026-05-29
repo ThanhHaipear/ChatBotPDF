@@ -1,32 +1,39 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   BookOpen,
   Bot,
   CheckCircle2,
-  Database,
+  ChevronDown,
   FileText,
   Loader2,
+  Menu,
   MessageSquare,
+  Plus,
   RefreshCw,
   Send,
+  Sparkles,
   Trash2,
   Upload,
+  User,
+  X,
 } from 'lucide-react';
 import './styles.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
+/* ═══════════════════════════════════════════════
+   App
+   ═══════════════════════════════════════════════ */
 function App() {
   const [documents, setDocuments] = useState([]);
   const [documentsLoading, setDocumentsLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [chatLoading, setChatLoading] = useState(false);
-  const [status, setStatus] = useState('');
-  const [error, setError] = useState('');
-  const [answer, setAnswer] = useState('');
-  const [sources, setSources] = useState([]);
-  const [recommendations, setRecommendations] = useState([]);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [toast, setToast] = useState(null);   // { type: 'success'|'error', text }
+  const [messages, setMessages] = useState([]); // chat history
   const [file, setFile] = useState(null);
   const [form, setForm] = useState({
     title: '',
@@ -36,402 +43,558 @@ function App() {
     priceType: 'FREE',
     sourceUrl: 'local-file',
   });
-  const [chat, setChat] = useState({
-    message: 'Tai lieu nay noi ve noi dung gi? Hay tom tat ngan gon va goi y cach hoc.',
+  const [chatInput, setChatInput] = useState('');
+  const [filters, setFilters] = useState({
     subject: 'Artificial Intelligence',
     topic: 'AI Automation',
     level: '',
     priceType: 'FREE',
   });
 
-  const indexedChunks = useMemo(
-    () => documents.reduce((total, doc) => total + (doc._count?.chunks || 0), 0),
-    [documents],
-  );
-
-  useEffect(() => {
-    loadDocuments();
+  // ── Toast helper ──
+  const showToast = useCallback((type, text) => {
+    setToast({ type, text });
+    setTimeout(() => setToast(null), 4000);
   }, []);
+
+  // ── Load documents ──
+  useEffect(() => { loadDocuments(); }, []);
 
   async function loadDocuments() {
     setDocumentsLoading(true);
-    setError('');
-
     try {
-      const response = await fetch(`${API_URL}/documents`);
-      if (!response.ok) {
-        throw new Error(`GET /documents failed with ${response.status}`);
-      }
-      const data = await response.json();
+      const res = await fetch(`${API_URL}/documents`);
+      if (!res.ok) throw new Error(`Lỗi tải danh sách tài liệu (${res.status})`);
+      const data = await res.json();
       setDocuments(Array.isArray(data) ? data : []);
     } catch (err) {
-      setError(getErrorMessage(err));
+      showToast('error', getErrorMessage(err));
     } finally {
       setDocumentsLoading(false);
     }
   }
 
-  async function uploadDocument(event) {
-    event.preventDefault();
-    setError('');
-    setStatus('');
-
+  // ── Upload ──
+  async function uploadDocument(e) {
+    e.preventDefault();
     if (!file) {
-      setError('Chon mot file PDF truoc khi upload.');
+      showToast('error', 'Vui lòng chọn file PDF trước khi tải lên.');
       return;
     }
-
     const payload = new FormData();
     payload.append('file', file);
-    Object.entries(form).forEach(([key, value]) => {
-      if (value) payload.append(key, value);
-    });
+    Object.entries(form).forEach(([k, v]) => { if (v) payload.append(k, v); });
 
     setUploading(true);
-
     try {
-      const response = await fetch(`${API_URL}/documents/upload`, {
-        method: 'POST',
-        body: payload,
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || `Upload failed with ${response.status}`);
-      }
-      setStatus(`Uploaded "${data.title}" voi ${data.totalChunks} chunk.`);
+      const res = await fetch(`${API_URL}/documents/upload`, { method: 'POST', body: payload });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || `Upload thất bại (${res.status})`);
+      showToast('success', `Đã tải lên "${data.title}" với ${data.totalChunks} đoạn.`);
       setFile(null);
+      setForm(prev => ({ ...prev, title: '' }));
+      setShowUploadModal(false);
       await loadDocuments();
     } catch (err) {
-      setError(getErrorMessage(err));
+      showToast('error', getErrorMessage(err));
     } finally {
       setUploading(false);
     }
   }
 
+  // ── Delete ──
   async function deleteDocument(id) {
-    setError('');
-    setStatus('');
-
     try {
-      const response = await fetch(`${API_URL}/documents/${id}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.message || `Delete failed with ${response.status}`);
+      const res = await fetch(`${API_URL}/documents/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || `Xóa thất bại (${res.status})`);
       }
-      setStatus('Document da duoc xoa.');
+      showToast('success', 'Đã xóa tài liệu.');
       await loadDocuments();
     } catch (err) {
-      setError(getErrorMessage(err));
+      showToast('error', getErrorMessage(err));
     }
   }
 
-  async function sendMessage(event) {
-    event.preventDefault();
-    setError('');
-    setStatus('');
-    setAnswer('');
-    setSources([]);
-    setRecommendations([]);
+  // ── Send message ──
+  async function sendMessage(e) {
+    e?.preventDefault();
+    const text = chatInput.trim();
+    if (!text) return;
 
-    if (!chat.message.trim()) {
-      setError('Nhap cau hoi truoc khi gui.');
-      return;
-    }
-
-    const body = Object.fromEntries(
-      Object.entries(chat).filter(([, value]) => value && value.trim()),
-    );
-
+    // Add user message
+    const userMsg = { role: 'user', text };
+    setMessages(prev => [...prev, userMsg]);
+    setChatInput('');
     setChatLoading(true);
 
+    const body = { message: text };
+    Object.entries(filters).forEach(([k, v]) => { if (v?.trim()) body[k] = v; });
+
     try {
-      const response = await fetch(`${API_URL}/chat`, {
+      const res = await fetch(`${API_URL}/chat`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || `POST /chat failed with ${response.status}`);
-      }
-      setAnswer(data.answer || '');
-      setSources(data.sources || []);
-      setRecommendations(data.recommendedDocuments || []);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || `Lỗi chat (${res.status})`);
+
+      const botMsg = {
+        role: 'bot',
+        text: data.answer || 'Không có câu trả lời.',
+        sources: data.sources || [],
+        recommendations: data.recommendedDocuments || [],
+      };
+      setMessages(prev => [...prev, botMsg]);
     } catch (err) {
-      setError(getErrorMessage(err));
+      const errMsg = { role: 'bot', text: `⚠️ ${getErrorMessage(err)}`, isError: true };
+      setMessages(prev => [...prev, errMsg]);
     } finally {
       setChatLoading(false);
     }
   }
 
+  // ── Suggestion click ──
+  function handleSuggestion(text) {
+    setChatInput(text);
+  }
+
   return (
-    <main className="app-shell">
-      <section className="topbar">
-        <div>
-          <span className="eyebrow">PDF RAG workspace</span>
-          <div className="brand">
-            <span className="brand-mark">
-              <Bot size={28} aria-hidden="true" />
-            </span>
-            <h1>StudyDocs AI</h1>
-          </div>
-          <p>RAG demo for PDF learning material recommendations</p>
-        </div>
-        <div className="topbar-actions">
-          <span className="api-pill">API {API_URL.replace('http://', '')}</span>
-          <button className="icon-button" type="button" onClick={loadDocuments} title="Refresh documents">
-            {documentsLoading ? <Loader2 className="spin" size={18} /> : <RefreshCw size={18} />}
-          </button>
-        </div>
-      </section>
+    <div className="app-layout">
+      {/* Sidebar overlay for mobile */}
+      <div
+        className={`sidebar-overlay ${sidebarOpen ? 'visible' : ''}`}
+        onClick={() => setSidebarOpen(false)}
+      />
 
-      <section className="stats-grid">
-        <Stat icon={<FileText size={20} />} label="Documents" value={documents.length} detail="Uploaded PDF files" />
-        <Stat icon={<Database size={20} />} label="Indexed chunks" value={indexedChunks} detail="Vector records" />
-        <Stat icon={<BookOpen size={20} />} label="Retrieval" value="20 -> 5" detail="Vector search and rerank" />
-      </section>
+      {/* Sidebar */}
+      <Sidebar
+        documents={documents}
+        documentsLoading={documentsLoading}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        onUploadClick={() => { setShowUploadModal(true); setSidebarOpen(false); }}
+        onDelete={deleteDocument}
+        onRefresh={loadDocuments}
+      />
 
-      {(status || error) && (
-        <section className={error ? 'alert error' : 'alert success'}>
-          {error ? <span>{error}</span> : <><CheckCircle2 size={18} /><span>{status}</span></>}
-        </section>
+      {/* Chat Area */}
+      <ChatArea
+        messages={messages}
+        chatLoading={chatLoading}
+        chatInput={chatInput}
+        filters={filters}
+        onInputChange={setChatInput}
+        onFiltersChange={setFilters}
+        onSend={sendMessage}
+        onSuggestion={handleSuggestion}
+        onMenuClick={() => setSidebarOpen(true)}
+      />
+
+      {/* Upload Modal */}
+      {showUploadModal && (
+        <UploadModal
+          file={file}
+          form={form}
+          uploading={uploading}
+          onFileChange={(f) => {
+            setFile(f);
+            if (f && !form.title) setForm(prev => ({ ...prev, title: f.name.replace(/\.pdf$/i, '') }));
+          }}
+          onFormChange={(key, val) => setForm(prev => ({ ...prev, [key]: val }))}
+          onSubmit={uploadDocument}
+          onClose={() => setShowUploadModal(false)}
+        />
       )}
 
-      <section className="workspace">
-        <form className="panel upload-panel" onSubmit={uploadDocument}>
-          <div className="panel-heading">
-            <div>
-              <h2>Upload PDF</h2>
-              <p>Index a study document into semantic chunks</p>
+      {/* Toast */}
+      {toast && (
+        <div className={`toast ${toast.type}`}>
+          {toast.type === 'success' ? <CheckCircle2 size={18} /> : <X size={18} />}
+          <span>{toast.text}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   Sidebar
+   ═══════════════════════════════════════════════ */
+function Sidebar({ documents, documentsLoading, isOpen, onClose, onUploadClick, onDelete, onRefresh }) {
+  return (
+    <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
+      <div className="sidebar-header">
+        <div className="sidebar-brand">
+          <div className="brand-icon">
+            <Bot size={24} />
+          </div>
+          <div className="brand-text">
+            <h1>StudyDocs AI</h1>
+            <p>Hỏi đáp tài liệu PDF</p>
+          </div>
+        </div>
+      </div>
+
+      <button className="upload-trigger" onClick={onUploadClick}>
+        <Plus size={18} />
+        <span>Tải lên tài liệu PDF</span>
+      </button>
+
+      <div className="sidebar-section-title">
+        <span>Tài liệu ({documents.length})</span>
+        <button onClick={onRefresh} title="Làm mới">
+          {documentsLoading ? <Loader2 className="spin" size={14} /> : <RefreshCw size={14} />}
+        </button>
+      </div>
+
+      <div className="document-list">
+        {documents.length === 0 && (
+          <div className="sidebar-empty">
+            <FileText size={32} style={{ opacity: 0.3, marginBottom: 8 }} />
+            <p>Chưa có tài liệu nào.<br />Hãy tải lên PDF đầu tiên!</p>
+          </div>
+        )}
+        {documents.map((doc) => (
+          <div className="doc-item" key={doc.id}>
+            <div className="doc-icon">
+              <FileText size={16} />
             </div>
-            <Upload size={20} aria-hidden="true" />
+            <div className="doc-info">
+              <h4>{doc.title}</h4>
+              <p>{[doc.subject, doc.level].filter(Boolean).join(' · ')}</p>
+            </div>
+            <button
+              className="doc-delete"
+              title="Xóa tài liệu"
+              onClick={() => onDelete(doc.id)}
+            >
+              <Trash2 size={14} />
+            </button>
           </div>
+        ))}
+      </div>
 
-          <label className="file-drop">
-            <input
-              type="file"
-              accept="application/pdf"
-              onChange={(event) => {
-                const nextFile = event.target.files?.[0] || null;
-                setFile(nextFile);
-                if (nextFile && !form.title) {
-                  setForm((current) => ({
-                    ...current,
-                    title: nextFile.name.replace(/\.pdf$/i, ''),
-                  }));
-                }
-              }}
-            />
-            <span className="file-icon">
-              <FileText size={22} aria-hidden="true" />
-            </span>
-            <span>
-              <strong>{file ? file.name : 'Choose a PDF file'}</strong>
-              <small>PDF text will be extracted and embedded</small>
-            </span>
-          </label>
+      <div className="sidebar-footer">
+        <span className="api-dot" />
+        <span>API: {API_URL.replace('http://', '')}</span>
+      </div>
+    </aside>
+  );
+}
 
-          <div className="form-grid">
-            <Field label="Title" value={form.title} onChange={(value) => setFormValue(setForm, 'title', value)} required />
-            <Field label="Subject" value={form.subject} onChange={(value) => setFormValue(setForm, 'subject', value)} required />
-            <Field label="Topic" value={form.topic} onChange={(value) => setFormValue(setForm, 'topic', value)} />
-            <Field label="Level" value={form.level} onChange={(value) => setFormValue(setForm, 'level', value)} />
-            <SelectField
-              label="Price"
-              value={form.priceType}
-              onChange={(value) => setFormValue(setForm, 'priceType', value)}
-              options={['FREE', 'PAID']}
-            />
-            <Field label="Source URL" value={form.sourceUrl} onChange={(value) => setFormValue(setForm, 'sourceUrl', value)} />
-          </div>
+/* ═══════════════════════════════════════════════
+   Chat Area
+   ═══════════════════════════════════════════════ */
+function ChatArea({
+  messages, chatLoading, chatInput, filters,
+  onInputChange, onFiltersChange, onSend, onSuggestion, onMenuClick,
+}) {
+  const messagesEndRef = useRef(null);
+  const textareaRef = useRef(null);
 
-          <button className="primary-button" type="submit" disabled={uploading}>
-            {uploading ? <Loader2 className="spin" size={18} /> : <Upload size={18} />}
-            <span>{uploading ? 'Indexing...' : 'Upload and index'}</span>
+  // Auto-scroll on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, chatLoading]);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  }, [chatInput]);
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      onSend(e);
+    }
+  }
+
+  const suggestions = [
+    'Tài liệu này nói về nội dung gì? Hãy tóm tắt ngắn gọn.',
+    'Các khái niệm chính trong tài liệu là gì?',
+    'Gợi ý cách học hiệu quả từ tài liệu này.',
+    'Liệt kê các chủ đề quan trọng cần ôn tập.',
+  ];
+
+  return (
+    <main className="chat-area">
+      {/* Header */}
+      <div className="chat-header">
+        <div className="chat-header-left">
+          <button className="mobile-menu-btn" onClick={onMenuClick}>
+            <Menu size={22} />
           </button>
-        </form>
-
-        <section className="panel documents-panel">
-          <div className="panel-heading">
-            <div>
-              <h2>Documents</h2>
-              <p>Indexed library available for retrieval</p>
-            </div>
-            <FileText size={20} aria-hidden="true" />
+          <div>
+            <h2>💬 Trò chuyện</h2>
+            <p>Hỏi đáp thông minh về tài liệu PDF của bạn</p>
           </div>
+        </div>
+      </div>
 
-          <div className="document-list">
-            {documents.length === 0 && (
-              <div className="empty-state">No indexed documents yet.</div>
+      {/* Messages */}
+      <div className="messages-container">
+        {messages.length === 0 ? (
+          <WelcomeScreen suggestions={suggestions} onSuggestion={onSuggestion} />
+        ) : (
+          <div className="messages-inner">
+            {messages.map((msg, idx) => (
+              <MessageBubble key={idx} message={msg} />
+            ))}
+
+            {chatLoading && (
+              <div className="typing-indicator">
+                <div className="message-avatar" style={{ background: '#f1f5f9', color: '#0ea5e9', border: '1px solid #e2e8f0' }}>
+                  <Bot size={18} />
+                </div>
+                <div className="typing-dots">
+                  <span /><span /><span />
+                </div>
+              </div>
             )}
 
-            {documents.map((doc) => (
-              <article className="document-row" key={doc.id}>
-                <div>
-                  <h3>{doc.title}</h3>
-                  <p>{[doc.subject, doc.topic, doc.level, doc.priceType].filter(Boolean).join(' | ')}</p>
-                  <span className="mini-badge">{doc._count?.chunks || 0} chunks</span>
-                </div>
-                <button
-                  className="icon-button danger"
-                  type="button"
-                  title="Delete document"
-                  onClick={() => deleteDocument(doc.id)}
-                >
-                  <Trash2 size={17} />
-                </button>
-              </article>
-            ))}
+            <div ref={messagesEndRef} />
           </div>
-        </section>
-      </section>
+        )}
+      </div>
 
-      <section className="chat-layout">
-        <form className="panel chat-panel" onSubmit={sendMessage}>
-          <div className="panel-heading">
-            <div>
-              <h2>Chat</h2>
-              <p>Ask a question against indexed sources</p>
-            </div>
-            <MessageSquare size={20} aria-hidden="true" />
-          </div>
-
-          <textarea
-            value={chat.message}
-            onChange={(event) => setFormValue(setChat, 'message', event.target.value)}
-            rows={5}
-          />
-
-          <div className="chat-filters">
-            <Field label="Subject" value={chat.subject} onChange={(value) => setFormValue(setChat, 'subject', value)} />
-            <Field label="Topic" value={chat.topic} onChange={(value) => setFormValue(setChat, 'topic', value)} />
-            <Field label="Level" value={chat.level} onChange={(value) => setFormValue(setChat, 'level', value)} />
-            <SelectField
-              label="Price"
-              value={chat.priceType}
-              onChange={(value) => setFormValue(setChat, 'priceType', value)}
-              options={['', 'FREE', 'PAID']}
+      {/* Input bar */}
+      <div className="input-bar">
+        <div className="input-bar-inner">
+          <form className="input-wrapper" onSubmit={onSend}>
+            <textarea
+              ref={textareaRef}
+              value={chatInput}
+              onChange={(e) => onInputChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Nhập câu hỏi về tài liệu..."
+              rows={1}
             />
+            <button className="send-btn" type="submit" disabled={chatLoading || !chatInput.trim()}>
+              {chatLoading ? <Loader2 className="spin" size={18} /> : <Send size={18} />}
+            </button>
+          </form>
+
+          <div className="filter-row">
+            <FilterChip label="Môn" value={filters.subject} onChange={(v) => onFiltersChange(prev => ({ ...prev, subject: v }))} />
+            <FilterChip label="Chủ đề" value={filters.topic} onChange={(v) => onFiltersChange(prev => ({ ...prev, topic: v }))} />
+            <FilterChip label="Cấp độ" value={filters.level} onChange={(v) => onFiltersChange(prev => ({ ...prev, level: v }))} />
+            <label className="filter-chip">
+              <span>Giá</span>
+              <select value={filters.priceType} onChange={(e) => onFiltersChange(prev => ({ ...prev, priceType: e.target.value }))}>
+                <option value="">Tất cả</option>
+                <option value="FREE">Miễn phí</option>
+                <option value="PAID">Trả phí</option>
+              </select>
+            </label>
           </div>
-
-          <button className="primary-button" type="submit" disabled={chatLoading}>
-            {chatLoading ? <Loader2 className="spin" size={18} /> : <Send size={18} />}
-            <span>{chatLoading ? 'Thinking...' : 'Send'}</span>
-          </button>
-        </form>
-
-        <section className="panel answer-panel">
-          <div className="panel-heading">
-            <div>
-              <h2>Answer</h2>
-              <p>Generated response with retrieved evidence</p>
-            </div>
-            <Bot size={20} aria-hidden="true" />
-          </div>
-          {answer ? <p className="answer-text">{answer}</p> : <div className="empty-state">Ask a question to see the RAG answer.</div>}
-
-          {recommendations.length > 0 && (
-            <div className="source-section">
-              <h3>Recommendations</h3>
-              {recommendations.map((item) => (
-                <div className="source-card" key={`${item.title}-${item.similarity}`}>
-                  <div className="source-title">
-                    <strong>{item.title}</strong>
-                    <ScorePills item={item} />
-                  </div>
-                  <p>{[item.subject, item.topic, item.level, item.priceType].filter(Boolean).join(' | ')}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {sources.length > 0 && (
-            <div className="source-section">
-              <h3>Sources</h3>
-              {sources.map((source, index) => (
-                <article className="source-card" key={`${source.documentTitle}-${index}`}>
-                  <div className="source-title">
-                    <strong>{source.documentTitle}</strong>
-                    <ScorePills item={source} />
-                  </div>
-                  <p>{source.preview}</p>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-      </section>
+        </div>
+      </div>
     </main>
   );
 }
 
-function Stat({ icon, label, value, detail }) {
+/* ── Welcome Screen ── */
+function WelcomeScreen({ suggestions, onSuggestion }) {
   return (
-    <div className="stat">
-      <span className="stat-icon">{icon}</span>
-      <div>
-        <span>{label}</span>
-        <strong>{value}</strong>
-        <small>{detail}</small>
+    <div className="welcome-screen">
+      <div className="welcome-icon">
+        <Sparkles size={32} />
+      </div>
+      <h2>Xin chào! 👋</h2>
+      <p>
+        Tôi là trợ lý AI giúp bạn hỏi đáp về tài liệu PDF.
+        Hãy tải lên tài liệu và đặt câu hỏi để bắt đầu!
+      </p>
+      <div className="welcome-suggestions">
+        {suggestions.map((text, i) => (
+          <button key={i} className="suggestion-card" onClick={() => onSuggestion(text)}>
+            <MessageSquare size={16} />
+            <span>{text}</span>
+          </button>
+        ))}
       </div>
     </div>
   );
 }
 
-function ScorePills({ item }) {
+/* ── Message Bubble ── */
+function MessageBubble({ message }) {
+  const [showSources, setShowSources] = useState(false);
+
   return (
-    <span className="score-pills">
-      <span title="Rerank score">R {formatScore(item.rerankScore)}</span>
-      <span title="Vector similarity">V {formatScore(item.similarity)}</span>
-    </span>
+    <div className={`message ${message.role}`}>
+      <div className="message-avatar">
+        {message.role === 'user' ? <User size={18} /> : <Bot size={18} />}
+      </div>
+      <div className="message-body">
+        <div className="message-sender">
+          {message.role === 'user' ? 'Bạn' : 'StudyDocs AI'}
+        </div>
+        <div className="message-content">
+          <p>{message.text}</p>
+        </div>
+
+        {/* Recommendations */}
+        {message.recommendations?.length > 0 && (
+          <div className="recommendations">
+            {message.recommendations.map((rec, i) => (
+              <span className="rec-tag" key={i}>
+                <BookOpen size={12} />
+                {rec.title}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Sources toggle */}
+        {message.sources?.length > 0 && (
+          <>
+            <button
+              className={`sources-toggle ${showSources ? 'open' : ''}`}
+              onClick={() => setShowSources(!showSources)}
+            >
+              <FileText size={13} />
+              {message.sources.length} nguồn tham khảo
+              <ChevronDown size={13} />
+            </button>
+
+            {showSources && (
+              <div className="sources-list">
+                {message.sources.map((src, i) => (
+                  <div className="source-chip" key={i}>
+                    <strong>{src.documentTitle}</strong>
+                    <p>{src.preview}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
-function Field({ label, value, onChange, required = false }) {
+/* ── Filter Chip ── */
+function FilterChip({ label, value, onChange }) {
   return (
-    <label className="field">
+    <label className="filter-chip">
       <span>{label}</span>
-      <input value={value} required={required} onChange={(event) => onChange(event.target.value)} />
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="..."
+      />
     </label>
   );
 }
 
-function SelectField({ label, value, onChange, options }) {
+/* ═══════════════════════════════════════════════
+   Upload Modal
+   ═══════════════════════════════════════════════ */
+function UploadModal({ file, form, uploading, onFileChange, onFormChange, onSubmit, onClose }) {
+  // Close on Escape
+  useEffect(() => {
+    function handleKey(e) { if (e.key === 'Escape') onClose(); }
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
   return (
-    <label className="field">
-      <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
-        {options.map((option) => (
-          <option key={option || 'any'} value={option}>
-            {option || 'Any'}
-          </option>
-        ))}
-      </select>
-    </label>
+    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal">
+        <div className="modal-header">
+          <h2>📄 Tải lên tài liệu PDF</h2>
+          <button className="modal-close" onClick={onClose}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <form className="modal-body" onSubmit={onSubmit}>
+          {/* File drop zone */}
+          <label className={`file-dropzone ${file ? 'has-file' : ''}`}>
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={(e) => onFileChange(e.target.files?.[0] || null)}
+            />
+            <div className="file-dropzone-icon">
+              {file ? <CheckCircle2 size={24} /> : <Upload size={24} />}
+            </div>
+            <strong>{file ? file.name : 'Chọn hoặc kéo thả file PDF'}</strong>
+            <small>{file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : 'Hỗ trợ file PDF — nội dung sẽ được trích xuất và nhúng vector'}</small>
+          </label>
+
+          {/* Form fields */}
+          <div className="modal-form-grid">
+            <div className="modal-field full-width">
+              <label>Tiêu đề</label>
+              <input
+                value={form.title}
+                required
+                onChange={(e) => onFormChange('title', e.target.value)}
+                placeholder="Nhập tiêu đề tài liệu..."
+              />
+            </div>
+            <div className="modal-field">
+              <label>Môn học</label>
+              <input
+                value={form.subject}
+                required
+                onChange={(e) => onFormChange('subject', e.target.value)}
+                placeholder="VD: Artificial Intelligence"
+              />
+            </div>
+            <div className="modal-field">
+              <label>Chủ đề</label>
+              <input
+                value={form.topic}
+                onChange={(e) => onFormChange('topic', e.target.value)}
+                placeholder="VD: AI Automation"
+              />
+            </div>
+            <div className="modal-field">
+              <label>Cấp độ</label>
+              <input
+                value={form.level}
+                onChange={(e) => onFormChange('level', e.target.value)}
+                placeholder="VD: Beginner"
+              />
+            </div>
+            <div className="modal-field">
+              <label>Loại giá</label>
+              <select value={form.priceType} onChange={(e) => onFormChange('priceType', e.target.value)}>
+                <option value="FREE">Miễn phí</option>
+                <option value="PAID">Trả phí</option>
+              </select>
+            </div>
+          </div>
+
+          <button className="modal-submit" type="submit" disabled={uploading}>
+            {uploading ? <Loader2 className="spin" size={18} /> : <Upload size={18} />}
+            <span>{uploading ? 'Đang xử lý...' : 'Tải lên và phân tích'}</span>
+          </button>
+        </form>
+      </div>
+    </div>
   );
 }
 
-function setFormValue(setter, key, value) {
-  setter((current) => ({
-    ...current,
-    [key]: value,
-  }));
-}
-
+/* ═══════════════════════════════════════════════
+   Utilities
+   ═══════════════════════════════════════════════ */
 function getErrorMessage(error) {
   if (error instanceof Error) return error.message;
-  return 'Unexpected error';
+  return 'Đã xảy ra lỗi không mong muốn.';
 }
 
-function formatScore(value) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number.toFixed(3) : '0.000';
-}
-
+/* ── Mount ── */
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />
