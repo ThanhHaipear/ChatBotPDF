@@ -1,18 +1,17 @@
 import {
-  IsNotEmpty,
   IsNumberString,
   IsOptional,
   IsString,
 } from 'class-validator';
 
 export class CreateDocumentDto {
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  title: string;
+  title?: string;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  subject: string;
+  subject?: string;
 
   @IsOptional()
   @IsString()

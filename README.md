@@ -4,7 +4,7 @@ StudyDocs AI is a RAG chatbot for answering questions and recommending learning 
 
 ## Key Features
 
-- Upload and index one or more PDF documents with shared metadata: title, subject, topic, level, priceType, price, and sourceUrl.
+- Upload and index one or more PDF documents with optional shared metadata: title, subject, topic, level, priceType, price, and sourceUrl.
 - Extract PDF text, clean it, and split it into overlapping chunks.
 - Generate 1024-dimensional embeddings with the Hugging Face `BAAI/bge-m3` model.
 - Store embeddings in PostgreSQL with the `pgvector` extension.
@@ -162,7 +162,7 @@ The frontend is designed as a document chat workspace:
 1. Open the upload modal from the sidebar.
 2. Select one or more PDF files in the same picker.
 3. Review the selected file list and remove any file before submitting.
-4. Fill in metadata. The metadata is shared across the selected files.
+4. Optionally fill in metadata. The metadata is shared across the selected files, but the app can index documents without it.
 5. Submit the upload. The frontend sends each PDF sequentially to the backend because the backend endpoint accepts one `file` per request.
 6. After upload, the document list refreshes and the files become available for retrieval and chat.
 
@@ -171,6 +171,8 @@ For multiple files, the title field behaves as a prefix. If it is empty, each do
 ```text
 <title prefix> - <pdf file name without extension>
 ```
+
+If `subject` is empty, the backend stores it as `General`. If `priceType` is empty, the backend stores it as `UNSPECIFIED`. This keeps upload simple for users who do not know the document category before indexing.
 
 ## API Endpoints
 
@@ -184,11 +186,11 @@ Content-Type: multipart/form-data
 Form fields:
 
 - `file`: PDF file, required
-- `title`: document title, required
-- `subject`: subject or domain, required
+- `title`: document title, optional; defaults to the PDF file name
+- `subject`: subject or domain, optional; defaults to `General`
 - `topic`: topic, optional
 - `level`: level, optional
-- `priceType`: `FREE` or `PAID`, optional
+- `priceType`: `FREE` or `PAID`, optional; defaults to `UNSPECIFIED`
 - `price`: price, optional
 - `sourceUrl`: source URL, optional
 

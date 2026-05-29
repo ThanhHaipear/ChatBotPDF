@@ -72,13 +72,13 @@ export class DocumentsService {
       const document = await this.prisma.$transaction(async (tx) => {
         const createdDocument = await tx.document.create({
           data: {
-            title: dto.title,
-            subject: dto.subject,
-            topic: dto.topic,
-            level: dto.level,
-            priceType: dto.priceType || 'FREE',
+            title: this.normalizeOptionalText(dto.title) || this.getTitleFromFile(file),
+            subject: this.normalizeOptionalText(dto.subject) || 'General',
+            topic: this.normalizeOptionalText(dto.topic),
+            level: this.normalizeOptionalText(dto.level),
+            priceType: this.normalizeOptionalText(dto.priceType) || 'UNSPECIFIED',
             price: dto.price ? Number(dto.price) : null,
-            sourceUrl: dto.sourceUrl,
+            sourceUrl: this.normalizeOptionalText(dto.sourceUrl),
             fileUrl: file.path,
           },
         });
@@ -170,6 +170,15 @@ export class DocumentsService {
     }
 
     await fs.unlink(file.path).catch(() => undefined);
+  }
+
+  private normalizeOptionalText(value?: string) {
+    const normalized = value?.trim();
+    return normalized || undefined;
+  }
+
+  private getTitleFromFile(file: Express.Multer.File) {
+    return file.originalname.replace(/\.pdf$/i, '').trim() || 'Untitled PDF';
   }
 
   private getErrorMessage(error: unknown) {

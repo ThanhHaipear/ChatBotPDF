@@ -38,18 +38,18 @@ function App() {
   const [uploadProgress, setUploadProgress] = useState('');
   const [form, setForm] = useState({
     title: '',
-    subject: 'Artificial Intelligence',
-    topic: 'AI Automation',
-    level: 'Beginner',
-    priceType: 'FREE',
+    subject: '',
+    topic: '',
+    level: '',
+    priceType: '',
     sourceUrl: 'local-file',
   });
   const [chatInput, setChatInput] = useState('');
   const [filters, setFilters] = useState({
-    subject: 'Artificial Intelligence',
-    topic: 'AI Automation',
+    subject: '',
+    topic: '',
     level: '',
-    priceType: 'FREE',
+    priceType: '',
   });
 
   // ── Toast helper ──
@@ -605,9 +605,8 @@ function UploadModal({
               <label>Môn học</label>
               <input
                 value={form.subject}
-                required
                 onChange={(e) => onFormChange('subject', e.target.value)}
-                placeholder="VD: Artificial Intelligence"
+                placeholder="Tự động nếu để trống"
               />
             </div>
             <div className="modal-field">
@@ -615,7 +614,7 @@ function UploadModal({
               <input
                 value={form.topic}
                 onChange={(e) => onFormChange('topic', e.target.value)}
-                placeholder="VD: AI Automation"
+                placeholder="Tùy chọn"
               />
             </div>
             <div className="modal-field">
@@ -623,12 +622,13 @@ function UploadModal({
               <input
                 value={form.level}
                 onChange={(e) => onFormChange('level', e.target.value)}
-                placeholder="VD: Beginner"
+                placeholder="Tùy chọn"
               />
             </div>
             <div className="modal-field">
               <label>Loại giá</label>
               <select value={form.priceType} onChange={(e) => onFormChange('priceType', e.target.value)}>
+                <option value="">Không phân loại</option>
                 <option value="FREE">Miễn phí</option>
                 <option value="PAID">Trả phí</option>
               </select>
