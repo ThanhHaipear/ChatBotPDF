@@ -397,9 +397,10 @@ a {
 }
 
 .messages-inner {
-  max-width: 800px;
+  width: 100%;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 clamp(24px, 4vw, 56px);
 }
 
 /* Welcome screen */
@@ -487,6 +488,10 @@ a {
   animation: fadeInUp 400ms ease;
 }
 
+.message.user {
+  flex-direction: row-reverse;
+}
+
 .message-avatar {
   width: 36px;
   height: 36px;
@@ -512,6 +517,19 @@ a {
 .message-body {
   flex: 1;
   min-width: 0;
+  max-width: min(82%, 980px);
+}
+
+.message.user .message-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-left: auto;
+  max-width: min(76%, 860px);
+}
+
+.message.bot .message-body {
+  margin-right: auto;
 }
 
 .message-sender {
@@ -521,7 +539,13 @@ a {
   color: var(--chat-text);
 }
 
+.message.user .message-sender {
+  text-align: right;
+}
+
 .message-content {
+  width: fit-content;
+  max-width: 100%;
   padding: 14px 18px;
   border-radius: var(--radius-md);
   line-height: 1.7;
@@ -531,7 +555,7 @@ a {
 .message.user .message-content {
   background: var(--user-bubble);
   color: #fff;
-  border-bottom-left-radius: var(--radius-sm);
+  border-bottom-right-radius: var(--radius-sm);
 }
 
 .message.bot .message-content {
@@ -639,6 +663,7 @@ a {
   gap: 12px;
   margin-bottom: 24px;
   animation: fadeInUp 300ms ease;
+  max-width: min(82%, 980px);
 }
 
 .typing-dots {
@@ -679,7 +704,8 @@ a {
 }
 
 .input-bar-inner {
-  max-width: 800px;
+  width: 100%;
+  max-width: 1120px;
   margin: 0 auto;
 }
 
