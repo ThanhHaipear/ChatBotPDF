@@ -34,7 +34,8 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toast, setToast] = useState(null);   // { type: 'success'|'error', text }
   const [messages, setMessages] = useState([]); // chat history
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
+  const [uploadProgress, setUploadProgress] = useState('');
   const [form, setForm] = useState({
     title: '',
     subject: 'Artificial Intelligence',
@@ -74,24 +75,41 @@ function App() {
     }
   }
 
-  // ── Upload ──
-  async function uploadDocument(e) {
+  async function uploadDocuments(e) {
     e.preventDefault();
-    if (!file) {
-      showToast('error', 'Vui lòng chọn file PDF trước khi tải lên.');
+
+    if (files.length === 0) {
+      showToast('error', 'Please select at least one PDF file before uploading.');
       return;
     }
-    const payload = new FormData();
-    payload.append('file', file);
-    Object.entries(form).forEach(([k, v]) => { if (v) payload.append(k, v); });
 
     setUploading(true);
+    setUploadProgress('');
+
     try {
-      const res = await fetch(`${API_URL}/documents/upload`, { method: 'POST', body: payload });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || `Upload thất bại (${res.status})`);
-      showToast('success', `Đã tải lên "${data.title}" với ${data.totalChunks} đoạn.`);
-      setFile(null);
+      for (let i = 0; i < files.length; i++) {
+        const currentFile = files[i];
+        setUploadProgress(`Uploading ${i + 1}/${files.length}: ${currentFile.name}`);
+
+        const payload = new FormData();
+        payload.append('file', currentFile);
+        Object.entries(form).forEach(([key, value]) => {
+          if (value && key !== 'title') payload.append(key, value);
+        });
+        payload.append('title', getUploadTitle(currentFile, form.title, files.length));
+
+        const response = await fetch(`${API_URL}/documents/upload`, {
+          method: 'POST',
+          body: payload,
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.message || `Upload failed for ${currentFile.name} (${response.status})`);
+        }
+      }
+
+      showToast('success', `Uploaded ${files.length} PDF file${files.length > 1 ? 's' : ''} successfully.`);
+      setFiles([]);
       setForm(prev => ({ ...prev, title: '' }));
       setShowUploadModal(false);
       await loadDocuments();
@@ -99,6 +117,18 @@ function App() {
       showToast('error', getErrorMessage(err));
     } finally {
       setUploading(false);
+      setUploadProgress('');
+    }
+  }
+
+  function handleFilesChange(nextFiles) {
+    const pdfFiles = Array.from(nextFiles || []).filter((item) =>
+      item.type === 'application/pdf' || item.name.toLowerCase().endsWith('.pdf'),
+    );
+
+    setFiles(pdfFiles);
+    if (pdfFiles.length === 1 && !form.title) {
+      setForm(prev => ({ ...prev, title: removePdfExtension(pdfFiles[0].name) }));
     }
   }
 
@@ -196,15 +226,14 @@ function App() {
       {/* Upload Modal */}
       {showUploadModal && (
         <UploadModal
-          file={file}
+          files={files}
           form={form}
           uploading={uploading}
-          onFileChange={(f) => {
-            setFile(f);
-            if (f && !form.title) setForm(prev => ({ ...prev, title: f.name.replace(/\.pdf$/i, '') }));
-          }}
+          uploadProgress={uploadProgress}
+          onFilesChange={handleFilesChange}
+          onRemoveFile={(index) => setFiles(prev => prev.filter((_, i) => i !== index))}
           onFormChange={(key, val) => setForm(prev => ({ ...prev, [key]: val }))}
-          onSubmit={uploadDocument}
+          onSubmit={uploadDocuments}
           onClose={() => setShowUploadModal(false)}
         />
       )}
@@ -498,7 +527,20 @@ function FilterChip({ label, value, onChange }) {
 /* ═══════════════════════════════════════════════
    Upload Modal
    ═══════════════════════════════════════════════ */
-function UploadModal({ file, form, uploading, onFileChange, onFormChange, onSubmit, onClose }) {
+function UploadModal({
+  files,
+  form,
+  uploading,
+  uploadProgress,
+  onFilesChange,
+  onRemoveFile,
+  onFormChange,
+  onSubmit,
+  onClose,
+}) {
+  const hasFiles = files.length > 0;
+  const totalSizeMb = files.reduce((total, item) => total + item.size, 0) / 1024 / 1024;
+
   // Close on Escape
   useEffect(() => {
     function handleKey(e) { if (e.key === 'Escape') onClose(); }
@@ -518,18 +560,36 @@ function UploadModal({ file, form, uploading, onFileChange, onFormChange, onSubm
 
         <form className="modal-body" onSubmit={onSubmit}>
           {/* File drop zone */}
-          <label className={`file-dropzone ${file ? 'has-file' : ''}`}>
+          <label className={`file-dropzone ${hasFiles ? 'has-file' : ''}`}>
             <input
               type="file"
               accept="application/pdf"
-              onChange={(e) => onFileChange(e.target.files?.[0] || null)}
+              multiple
+              onChange={(e) => onFilesChange(e.target.files)}
             />
             <div className="file-dropzone-icon">
-              {file ? <CheckCircle2 size={24} /> : <Upload size={24} />}
+              {hasFiles ? <CheckCircle2 size={24} /> : <Upload size={24} />}
             </div>
-            <strong>{file ? file.name : 'Chọn hoặc kéo thả file PDF'}</strong>
-            <small>{file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : 'Hỗ trợ file PDF — nội dung sẽ được trích xuất và nhúng vector'}</small>
+            <strong>{hasFiles ? `${files.length} PDF file${files.length > 1 ? 's' : ''} selected` : 'Choose or drag PDF files'}</strong>
+            <small>{hasFiles ? `${totalSizeMb.toFixed(2)} MB total` : 'Select one or more PDFs to extract text and create vectors'}</small>
           </label>
+
+          {hasFiles && (
+            <div className="selected-files">
+              {files.map((selectedFile, index) => (
+                <div className="selected-file" key={`${selectedFile.name}-${selectedFile.lastModified}`}>
+                  <FileText size={15} />
+                  <div>
+                    <strong>{selectedFile.name}</strong>
+                    <small>{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</small>
+                  </div>
+                  <button type="button" onClick={() => onRemoveFile(index)} disabled={uploading} title="Remove file">
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Form fields */}
           <div className="modal-form-grid">
@@ -537,7 +597,6 @@ function UploadModal({ file, form, uploading, onFileChange, onFormChange, onSubm
               <label>Tiêu đề</label>
               <input
                 value={form.title}
-                required
                 onChange={(e) => onFormChange('title', e.target.value)}
                 placeholder="Nhập tiêu đề tài liệu..."
               />
@@ -576,7 +635,14 @@ function UploadModal({ file, form, uploading, onFileChange, onFormChange, onSubm
             </div>
           </div>
 
-          <button className="modal-submit" type="submit" disabled={uploading}>
+          {uploadProgress && (
+            <div className="upload-progress">
+              <Loader2 className="spin" size={14} />
+              <span>{uploadProgress}</span>
+            </div>
+          )}
+
+          <button className="modal-submit" type="submit" disabled={uploading || !hasFiles}>
             {uploading ? <Loader2 className="spin" size={18} /> : <Upload size={18} />}
             <span>{uploading ? 'Đang xử lý...' : 'Tải lên và phân tích'}</span>
           </button>
@@ -595,6 +661,19 @@ function getErrorMessage(error) {
 }
 
 /* ── Mount ── */
+function removePdfExtension(fileName) {
+  return fileName.replace(/\.pdf$/i, '');
+}
+
+function getUploadTitle(file, titlePrefix, totalFiles) {
+  const fileTitle = removePdfExtension(file.name);
+  const cleanPrefix = titlePrefix.trim();
+
+  if (!cleanPrefix) return fileTitle;
+  if (totalFiles === 1) return cleanPrefix;
+  return `${cleanPrefix} - ${fileTitle}`;
+}
+
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />

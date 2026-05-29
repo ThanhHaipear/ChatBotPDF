@@ -4,14 +4,14 @@ StudyDocs AI is a RAG chatbot for answering questions and recommending learning 
 
 ## Key Features
 
-- Upload and index PDF documents with metadata: title, subject, topic, level, priceType, price, and sourceUrl.
+- Upload and index one or more PDF documents with shared metadata: title, subject, topic, level, priceType, price, and sourceUrl.
 - Extract PDF text, clean it, and split it into overlapping chunks.
 - Generate 1024-dimensional embeddings with the Hugging Face `BAAI/bge-m3` model.
 - Store embeddings in PostgreSQL with the `pgvector` extension.
 - Retrieve top-K chunks with vector similarity search, defaulting to the top 20 chunks.
 - Rerank results with a Hugging Face reranker, defaulting to `BAAI/bge-reranker-v2-m3`; if reranking fails, the app falls back to similarity scores.
 - Generate source-grounded answers with a LangChain prompt and the OpenAI Responses API.
-- Provide a React/Vite frontend with an upload modal, document list, chat UI, filters, source previews, and recommendations.
+- Provide a React/Vite frontend with a multi-file upload modal, selected-file list, document list, chat UI, filters, source previews, and recommendations.
 
 ## Architecture
 
@@ -155,6 +155,23 @@ You can override it with a Vite environment variable:
 VITE_API_URL="http://localhost:3000"
 ```
 
+## Frontend Workflow
+
+The frontend is designed as a document chat workspace:
+
+1. Open the upload modal from the sidebar.
+2. Select one or more PDF files in the same picker.
+3. Review the selected file list and remove any file before submitting.
+4. Fill in metadata. The metadata is shared across the selected files.
+5. Submit the upload. The frontend sends each PDF sequentially to the backend because the backend endpoint accepts one `file` per request.
+6. After upload, the document list refreshes and the files become available for retrieval and chat.
+
+For multiple files, the title field behaves as a prefix. If it is empty, each document title is generated from its PDF file name. If it has a value, each uploaded document title becomes:
+
+```text
+<title prefix> - <pdf file name without extension>
+```
+
 ## API Endpoints
 
 ### Upload PDF
@@ -174,6 +191,8 @@ Form fields:
 - `priceType`: `FREE` or `PAID`, optional
 - `price`: price, optional
 - `sourceUrl`: source URL, optional
+
+The API endpoint accepts one PDF file per request. The frontend supports multi-file upload by submitting one request per selected PDF.
 
 ### List Documents
 
@@ -220,7 +239,7 @@ The response includes:
 
 ## RAG Flow
 
-1. The user uploads a PDF.
+1. The user uploads one or more PDFs from the frontend.
 2. The backend reads the file, extracts text, and splits it into chunks, defaulting to 700 words per chunk with a 100-word overlap.
 3. Each chunk is embedded with Hugging Face.
 4. Chunks and vectors are stored in PostgreSQL/pgvector.
