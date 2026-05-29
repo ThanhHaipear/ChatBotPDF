@@ -1,19 +1,61 @@
 # StudyDocs AI
 
-StudyDocs AI is a RAG chatbot for answering questions and recommending learning materials from PDF files. The system uploads PDFs, splits extracted text into chunks, creates Hugging Face embeddings, stores vectors in PostgreSQL with pgvector, retrieves relevant chunks, reranks them, and uses OpenAI to generate Vietnamese answers.
+StudyDocs AI is a full-stack RAG application for uploading PDF learning materials, indexing their content, and chatting with the indexed documents in Vietnamese. It extracts PDF text, chunks and embeds the content with Hugging Face, stores vectors in PostgreSQL with pgvector, retrieves and reranks relevant chunks, and generates grounded answers with OpenAI.
 
-## Key Features
+## Live Deployment
 
-- Upload and index one or more PDF documents with optional shared metadata: title, subject, topic, level, priceType, price, and sourceUrl.
-- Extract PDF text, clean it, and split it into overlapping chunks.
-- Generate 1024-dimensional embeddings with the Hugging Face `BAAI/bge-m3` model.
-- Store embeddings in PostgreSQL with the `pgvector` extension.
-- Retrieve top-K chunks with vector similarity search, defaulting to the top 20 chunks.
-- Rerank results with a Hugging Face reranker, defaulting to `BAAI/bge-reranker-v2-m3`; if reranking fails, the app falls back to similarity scores.
-- Generate source-grounded answers with a LangChain prompt and the OpenAI Responses API.
-- Provide a React/Vite frontend with a multi-file upload modal, selected-file list, document list, chat UI, filters, source previews, and recommendations.
+- Frontend: https://d1pj5tfnec08t0.cloudfront.net
+- API base URL: https://d1pj5tfnec08t0.cloudfront.net
+- API routes are served through CloudFront and forwarded to the backend ALB.
+
+## Features
+
+- Upload and index one or more PDF files.
+- Store document metadata such as title, subject, topic, level, price type, price, and source URL.
+- Extract, clean, and chunk PDF text for retrieval.
+- Generate 1024-dimensional embeddings with Hugging Face `BAAI/bge-m3`.
+- Store embeddings in PostgreSQL using the `pgvector` extension.
+- Retrieve relevant chunks with vector search and rerank them with Hugging Face `BAAI/bge-reranker-v2-m3`.
+- Generate Vietnamese answers with OpenAI and source-grounded context.
+- Show recommended documents and source previews in the chat UI.
+- Deploy backend and frontend automatically with GitHub Actions.
+
+## Tech Stack
+
+| Area | Technology |
+| --- | --- |
+| Frontend | React 19, Vite 7, lucide-react |
+| Backend | NestJS 11, TypeScript |
+| Database | PostgreSQL 16, pgvector |
+| ORM | Prisma 6 |
+| AI | Hugging Face Inference API, OpenAI Responses API, LangChain prompt formatting |
+| PDF parsing | pdf-parse |
+| Testing | Jest, Supertest |
+| Deployment | AWS ECR, ECS Fargate, RDS, S3, CloudFront, ALB, Secrets Manager |
+| CI/CD | GitHub Actions with AWS OIDC |
 
 ## Architecture
+
+```text
+Users
+  |
+  v
+CloudFront
+  |-- Static frontend -> S3
+  |
+  |-- /documents*, /chat* -> Application Load Balancer
+                                |
+                                v
+                         ECS Fargate backend
+                                |
+                                +-- RDS PostgreSQL + pgvector
+                                +-- AWS Secrets Manager
+                                +-- CloudWatch Logs
+                                +-- OpenAI API
+                                +-- Hugging Face API
+```
+
+Local development uses the same application structure:
 
 ```text
 frontend/ React + Vite
@@ -22,53 +64,50 @@ frontend/ React + Vite
     v
 backend/ NestJS API
     |
-    +-- pdf-parse: reads PDFs
-    +-- Hugging Face: embeddings + reranking
-    +-- Prisma: ORM
-    +-- PostgreSQL + pgvector: stores documents, chunks, and vectors
-    +-- OpenAI: generates RAG answers
+    +-- pdf-parse
+    +-- Hugging Face embeddings and reranking
+    +-- Prisma
+    +-- PostgreSQL + pgvector
+    +-- OpenAI generation
 ```
-
-## Tech Stack
-
-- Frontend: React 19, Vite 7, lucide-react
-- Backend: NestJS 11, TypeScript, Prisma 6
-- Database: PostgreSQL 16, pgvector
-- AI/RAG: Hugging Face Inference API, LangChain prompt, OpenAI `gpt-4.1-mini`
-- PDF processing: `pdf-parse`
-- Testing: Jest, Supertest
 
 ## Project Structure
 
 ```text
 .
+|-- .github/workflows/
+|   |-- backend.yml             # Backend test, image build, ECR push, ECS deploy
+|   `-- frontend.yml            # Frontend build, S3 sync, CloudFront invalidation
 |-- backend/
 |   |-- prisma/                 # Prisma schema and migrations
 |   |-- src/
-|   |   |-- chat/               # Chat API and RAG orchestration
+|   |   |-- chat/               # Chat endpoint and RAG orchestration
 |   |   |-- documents/          # PDF upload, parsing, and indexing
 |   |   |-- huggingface/        # Embedding service
 |   |   |-- openai/             # OpenAI generation service
-|   |   |-- rag/                # Context and prompt formatting
+|   |   |-- rag/                # Prompt and context formatting
 |   |   |-- rerank/             # Reranking service
 |   |   `-- utils/              # Text cleaning and chunking
-|   `-- docker-compose.yml      # PostgreSQL + pgvector
+|   |-- Dockerfile
+|   `-- docker-compose.yml      # Local PostgreSQL + pgvector
 |-- frontend/
-|   |-- src/main.jsx            # React app
-|   |-- src/styles.css          # UI styles
+|   |-- src/main.jsx
+|   |-- src/styles.css
 |   `-- vite.config.js
+|-- AWS_DEPLOY_CICD_GUIDE.md
 `-- README.md
 ```
 
 ## Requirements
 
-- Node.js compatible with the current NestJS/Vite setup
+- Node.js 22 or compatible
 - npm
 - Docker Desktop or Docker Engine
 - OpenAI API key
 - Hugging Face token
+- AWS CLI, only for deployment operations
 
-## Backend Configuration
+## Environment Variables
 
 Create `backend/.env` from `backend/.env.example`:
 
@@ -84,24 +123,27 @@ RAG_VECTOR_TOP_K=20
 RAG_RERANK_TOP_K=5
 OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
 PORT=3000
+FRONTEND_URL="http://localhost:5173"
 ```
 
-Notes:
+Frontend can optionally use:
 
-- The Prisma schema defines `DocumentChunk.embedding` as `vector(1024)`, so the embedding model must return exactly 1024 dimensions.
-- If you change the embedding model or vector size, create a matching database migration and reindex documents.
-- `HUGGINGFACE_EMBEDDING_FALLBACK="hashing"` can be used as a fallback when Hugging Face is unreachable, but it is intended only for demo or development use.
+```env
+VITE_API_URL="http://localhost:3000"
+```
+
+Production secrets are stored in AWS Secrets Manager under `studydocs/backend/*`.
 
 ## Local Development
 
-### 1. Start the database
+### 1. Start PostgreSQL with pgvector
 
 ```bash
 cd backend
 docker compose up -d
 ```
 
-### 2. Install dependencies and migrate the database
+### 2. Install backend dependencies and migrate
 
 ```bash
 cd backend
@@ -110,26 +152,26 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-To reset the database in development:
+For a clean local reset:
 
 ```bash
 npx prisma migrate reset
 ```
 
-### 3. Start the backend
+### 3. Run the backend
 
 ```bash
 cd backend
 npm run start:dev
 ```
 
-The backend runs at:
+Backend URL:
 
 ```text
 http://localhost:3000
 ```
 
-### 4. Start the frontend
+### 4. Run the frontend
 
 ```bash
 cd frontend
@@ -137,44 +179,13 @@ npm install
 npm run dev -- --port 5173
 ```
 
-Open the app at:
+Frontend URL:
 
 ```text
 http://localhost:5173
 ```
 
-The frontend calls this API by default:
-
-```text
-http://localhost:3000
-```
-
-You can override it with a Vite environment variable:
-
-```env
-VITE_API_URL="http://localhost:3000"
-```
-
-## Frontend Workflow
-
-The frontend is designed as a document chat workspace:
-
-1. Open the upload modal from the sidebar.
-2. Select one or more PDF files in the same picker.
-3. Review the selected file list and remove any file before submitting.
-4. Optionally fill in metadata. The metadata is shared across the selected files, but the app can index documents without it.
-5. Submit the upload. The frontend sends each PDF sequentially to the backend because the backend endpoint accepts one `file` per request.
-6. After upload, the document list refreshes and the files become available for retrieval and chat.
-
-For multiple files, the title field behaves as a prefix. If it is empty, each document title is generated from its PDF file name. If it has a value, each uploaded document title becomes:
-
-```text
-<title prefix> - <pdf file name without extension>
-```
-
-If `subject` is empty, the backend stores it as `General`. If `priceType` is empty, the backend stores it as `UNSPECIFIED`. This keeps upload simple for users who do not know the document category before indexing.
-
-## API Endpoints
+## API Reference
 
 ### Upload PDF
 
@@ -186,15 +197,15 @@ Content-Type: multipart/form-data
 Form fields:
 
 - `file`: PDF file, required
-- `title`: document title, optional; defaults to the PDF file name
-- `subject`: subject or domain, optional; defaults to `General`
+- `title`: document title, optional
+- `subject`: subject or domain, optional, defaults to `General`
 - `topic`: topic, optional
 - `level`: level, optional
-- `priceType`: `FREE` or `PAID`, optional; defaults to `UNSPECIFIED`
+- `priceType`: `FREE`, `PAID`, or `UNSPECIFIED`
 - `price`: price, optional
 - `sourceUrl`: source URL, optional
 
-The API endpoint accepts one PDF file per request. The frontend supports multi-file upload by submitting one request per selected PDF.
+The backend accepts one PDF per request. The frontend supports multi-file uploads by submitting files sequentially.
 
 ### List Documents
 
@@ -214,20 +225,20 @@ GET /documents/:id
 DELETE /documents/:id
 ```
 
-### Chat With Documents
+### Chat
 
 ```http
 POST /chat
 Content-Type: application/json
 ```
 
-Body:
+Example body:
 
 ```json
 {
-  "message": "What is this document about?",
-  "subject": "Artificial Intelligence",
-  "topic": "AI Automation",
+  "message": "Summarize this document",
+  "subject": "Distributed Systems",
+  "topic": "Processes",
   "level": "",
   "priceType": "FREE"
 }
@@ -235,23 +246,77 @@ Body:
 
 The response includes:
 
-- `answer`: an OpenAI-generated answer grounded in retrieved context
+- `answer`: generated answer
 - `recommendedDocuments`: matching document recommendations
-- `sources`: source chunks used for the answer, including similarity and rerankScore
+- `sources`: retrieved chunks with preview, vector similarity, and rerank score
 
 ## RAG Flow
 
-1. The user uploads one or more PDFs from the frontend.
-2. The backend reads the file, extracts text, and splits it into chunks, defaulting to 700 words per chunk with a 100-word overlap.
-3. Each chunk is embedded with Hugging Face.
-4. Chunks and vectors are stored in PostgreSQL/pgvector.
-5. During chat, the user question is embedded.
-6. pgvector retrieves the top `RAG_VECTOR_TOP_K` chunks by vector similarity.
-7. The rerank service reorders chunks and selects the top `RAG_RERANK_TOP_K`.
-8. RagService formats the context and prompt.
-9. OpenAI generates a Vietnamese answer with recommendations and source data for the UI.
+1. User uploads PDF files.
+2. Backend extracts text with `pdf-parse`.
+3. Text is cleaned and split into overlapping chunks.
+4. Each chunk is embedded with Hugging Face.
+5. Chunks and vectors are stored in PostgreSQL with pgvector.
+6. User asks a question.
+7. The question is embedded.
+8. pgvector retrieves top candidate chunks.
+9. Hugging Face reranker reorders the candidates.
+10. OpenAI generates a grounded Vietnamese answer from the selected context.
 
-## Verification Commands
+## Deployment
+
+The current AWS deployment uses:
+
+- ECR repository: `studydocs-ai-backend`
+- ECS cluster: `studydocs-cluster`
+- ECS service: `studydocs-backend-service`
+- RDS instance: `studydocs-postgres`
+- S3 bucket: `studydocs-frontend-809574937443`
+- CloudFront distribution: `E1MCSVQ2VV8EYU`
+- GitHub Actions role: `studydocs-github-actions-role`
+
+Backend Docker image:
+
+```text
+809574937443.dkr.ecr.ap-southeast-1.amazonaws.com/studydocs-ai-backend
+```
+
+See [AWS_DEPLOY_CICD_GUIDE.md](AWS_DEPLOY_CICD_GUIDE.md) for the detailed deployment checklist.
+
+## CI/CD
+
+GitHub Actions uses AWS OIDC. No long-lived AWS access key is stored in GitHub.
+
+Backend workflow:
+
+```text
+.github/workflows/backend.yml
+```
+
+On push to `main` with backend changes:
+
+1. Install dependencies.
+2. Build the NestJS app.
+3. Run Jest tests.
+4. Build the Docker image.
+5. Push image tags to ECR.
+6. Register a new ECS task definition.
+7. Deploy the ECS service.
+
+Frontend workflow:
+
+```text
+.github/workflows/frontend.yml
+```
+
+On push to `main` with frontend changes:
+
+1. Install dependencies.
+2. Build the Vite app with `VITE_API_URL`.
+3. Sync `frontend/dist` to S3.
+4. Invalidate CloudFront.
+
+## Verification
 
 Backend:
 
@@ -268,9 +333,22 @@ cd frontend
 npm run build
 ```
 
+Production smoke checks:
+
+```bash
+curl https://d1pj5tfnec08t0.cloudfront.net/documents
+```
+
+Then open the frontend and upload a small PDF:
+
+```text
+https://d1pj5tfnec08t0.cloudfront.net
+```
+
 ## Operational Notes
 
-- `backend/uploads` stores locally uploaded PDF files.
-- Documents indexed with the old 1536-dimensional embeddings must be uploaded and indexed again because the current schema uses `vector(1024)`.
-- Reranking falls back to vector similarity when the Hugging Face rerank endpoint does not return valid scores.
-- End-to-end testing requires PostgreSQL to be running, a valid `.env`, and at least one successfully uploaded and indexed PDF.
+- Uploaded PDFs are currently stored on the backend container filesystem at `uploads/`. ECS Fargate storage is ephemeral, so the indexed text and vectors remain in RDS, but original uploaded files are not durable across task replacement.
+- For durable original PDF storage, move uploads to S3 and store the S3 key in `Document.fileUrl`.
+- The Prisma schema expects `vector(1024)`. Changing the embedding model or vector dimension requires a schema migration and document reindexing.
+- Reranking falls back to vector similarity if the Hugging Face rerank endpoint fails.
+- Production API keys and database URLs must stay in AWS Secrets Manager or local `.env` files, never in Git.
